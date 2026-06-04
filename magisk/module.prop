@@ -1,0 +1,6 @@
+id=copperhead-gateway
+name=Copperhead GSM-SIP Gateway
+version=1.0.0
+versionCode=1
+author=Copperhead
+description=Grants privileged permissions for GSM-SIP gateway (call control, audio capture, telephony state)

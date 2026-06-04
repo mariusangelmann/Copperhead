@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Copperhead" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#F59E0B</item>
+        <item name="colorPrimaryContainer">#78350F</item>
+        <item name="colorOnPrimaryContainer">#FEF3C7</item>
+        <item name="colorSecondary">#FBBF24</item>
+        <item name="colorSecondaryContainer">#92400E</item>
+        <item name="colorTertiary">#FCD34D</item>
+        <item name="colorSurface">#1C1917</item>
+        <item name="colorSurfaceVariant">#292524</item>
+        <item name="colorOnSurface">#F5F5F4</item>
+        <item name="colorOnSurfaceVariant">#A8A29E</item>
+        <item name="colorError">#EF4444</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

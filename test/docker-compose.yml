@@ -1,0 +1,11 @@
+services:
+  asterisk:
+    image: andrius/asterisk
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10200:10000-10200/udp"
+    volumes:
+      - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf
+      - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf
+      - ./asterisk/modules.conf:/etc/asterisk/modules.conf

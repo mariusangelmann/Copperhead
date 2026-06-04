@@ -1,0 +1,27 @@
+# Copperhead GSM-SIP Gateway — SELinux policy patches
+#
+# Background: even with priv-app status + CAPTURE_AUDIO_OUTPUT, the SELinux
+# `priv_app` domain doesn't get default access to the audioserver service for
+# call-audio capture. These rules grant exactly what's needed for AudioRecord
+# on MediaRecorder.AudioSource.VOICE_CALL (4) / VOICE_DOWNLINK (3) /
+# VOICE_UPLINK (2), and AudioTrack on STREAM_VOICE_CALL.
+#
+# We narrow each rule to the minimum class/permission set so we don't open
+# the priv_app domain wider than necessary.
+
+# Find and bind to the audioserver via servicemanager
+allow priv_app audioserver_service:service_manager find
+allow priv_app audioserver:binder { call transfer }
+
+# Call into AudioFlinger / AudioPolicyManager
+allow priv_app mediaserver_service:service_manager find
+allow priv_app mediaserver:binder { call transfer }
+
+# Read /dev/audio* and related shared memory used by the audio HAL
+allow priv_app audio_device:chr_file { read write open ioctl getattr }
+allow priv_app audiohal_service:service_manager find
+
+# Some HALs require access to the system_server's telephony hooks during
+# MODE_IN_CALL transitions
+allow priv_app radio_service:service_manager find
+allow priv_app phone_service:service_manager find

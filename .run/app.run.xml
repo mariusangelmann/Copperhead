@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="app" type="AndroidRunConfigurationType" factoryName="Android App">
+        <module name="Copperhead.app.main" />
+        <option name="DEPLOY" value="DEFAULT_APK" />
+        <option name="DEPLOY_APK_FROM_BUNDLE" value="false" />
+        <option name="ARTIFACT_NAME" value="" />
+        <option name="PM_INSTALL_OPTIONS" value="-g" />
+        <option name="ACTIVITY_EXTRA_FLAGS" value="" />
+        <option name="MODE" value="default_activity" />
+        <option name="CLEAR_LOGCAT" value="false" />
+        <option name="SHOW_LOGCAT_AUTOMATICALLY" value="true" />
+        <option name="INSPECTION_WITHOUT_ACTIVITY_RESTART" value="false" />
+        <option name="TARGET_SELECTION_MODE" value="SHOW_DIALOG" />
+        <option name="SELECTED_CLOUD_MATRIX_CONFIGURATION_ID" value="-1" />
+        <option name="SELECTED_CLOUD_MATRIX_PROJECT_ID" value="" />
+        <option name="DEBUGGER_TYPE" value="Auto" />
+        <Auto>
+            <option name="USE_JAVA_AWARE_DEBUGGER" value="true" />
+            <option name="SHOW_STATIC_VARS" value="true" />
+        </Auto>
+        <Profilers>
+            <option name="ADVANCED_PROFILING_ENABLED" value="false" />
+        </Profilers>
+    </configuration>
+</component>

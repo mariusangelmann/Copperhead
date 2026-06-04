@@ -1,0 +1,106 @@
+<resources>
+    <string name="app_name">Copperhead</string>
+    <string name="gateway_subtitle">GSM-SIP Gateway</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_starting">Starting…</string>
+    <string name="status_running">Running</string>
+    <string name="status_registered">Registered</string>
+    <string name="status_not_registered">Not Registered</string>
+    <string name="start_gateway">Start Gateway</string>
+    <string name="stop_gateway">Stop Gateway</string>
+    <string name="tab_status">Status</string>
+    <string name="tab_accounts">Accounts</string>
+    <string name="tab_log">Log</string>
+    <string name="sip_server">SIP Server</string>
+    <string name="sip_port">Port</string>
+    <string name="sip_username">Username</string>
+    <string name="sip_password">Password</string>
+    <string name="sip_transport">Transport</string>
+    <string name="sim_slot">SIM Slot</string>
+    <string name="sim_any">Any</string>
+    <string name="sim_1">SIM 1</string>
+    <string name="sim_2">SIM 2</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="add_account">Add SIP Account</string>
+    <string name="auto_start">Start on boot</string>
+    <string name="forward_incoming">Forward incoming GSM calls to SIP</string>
+    <string name="no_accounts">No SIP accounts configured</string>
+    <string name="account_saved">Account saved</string>
+    <string name="clear_log">Clear</string>
+    <string name="calls_label">Active Calls</string>
+    <string name="no_active_calls">No active calls</string>
+    <string name="settings">Settings</string>
+
+    <!-- Main Screen -->
+    <string name="gateway_offline">Gateway Offline</string>
+    <string name="status_badge_live">LIVE</string>
+    <string name="status_badge_offline">OFFLINE</string>
+    <string name="hero_offline_hint">Configure your SIP account and tap Start</string>
+    <string name="hero_connecting_hint">Attempting SIP registration\u2026</string>
+    <string name="stat_uptime">Uptime</string>
+    <string name="stat_sip">SIP</string>
+    <string name="stat_bridge">Bridge</string>
+    <string name="sip_account_title">SIP Account</string>
+    <string name="sim_cards_title">SIM Cards</string>
+    <string name="activity_log">Activity Log</string>
+    <string name="log_open_full">Tap to view full log</string>
+    <string name="log_copy">Copy to clipboard</string>
+    <string name="log_share">Share</string>
+    <string name="log_scroll_bottom">Scroll to bottom</string>
+    <string name="log_copied">Log copied</string>
+    <string name="audio_probe">Audio HAL probe</string>
+    <string name="audio_probe_running">Probing audio HAL…</string>
+    <string name="audio_probe_copied">Audio HAL report copied to clipboard</string>
+    <string name="auto_start_desc">Launch gateway automatically when device restarts</string>
+    <string name="forward_incoming_desc">Bridge incoming cellular calls to your SIP server</string>
+    <string name="speakerphone_loopback">Speakerphone loopback (audio fix)</string>
+    <string name="speakerphone_loopback_desc">Forces the speakerphone on and routes SIP audio through the device speaker so the cellular call\'s microphone picks it up. Use this if callers can\'t hear audio. Causes echo and lower quality — only enable if needed. Restart gateway after changing.</string>
+    <string name="mute_device_mic">Mute device microphone</string>
+    <string name="mute_device_mic_desc">Gateway mode: cellular caller hears ONLY SIP audio (e.g. FreePBX announcements), not ambient room noise from the device microphone. Turn off only if someone is actually speaking into this phone.</string>
+    <string name="block_mic_system_wide">Block microphone system-wide</string>
+    <string name="block_mic_system_wide_desc">Hard kill switch (Android 12+). Same state as Quick Settings → Mic access. ALL apps see silence — cellular calls, voice assistants, recorders, voice typing, everything. On supported Pixels this is a hardware-level disconnect at the audio codec. Persists across reboots and Copperhead being killed. The user can still toggle it off via Quick Settings. Emergency calls bypass it.</string>
+    <string name="block_mic_unsupported">System mic block not available on this device / Android version</string>
+
+    <!-- Setup / Onboarding -->
+    <string name="setup_subtitle">Let\'s get your gateway ready</string>
+    <string name="setup_progress">%1$d of %2$d complete</string>
+
+    <string name="setup_step_permissions">Permissions</string>
+    <string name="setup_permissions_desc">Phone, SMS, audio, and call log access are needed to bridge calls and messages between GSM and SIP.</string>
+    <string name="setup_grant_permissions">Grant Permissions</string>
+
+    <string name="setup_step_notifications">Notifications</string>
+    <string name="setup_notif_desc">Required for the foreground service notification that keeps the gateway alive.</string>
+    <string name="setup_grant_notifications">Enable Notifications</string>
+
+    <string name="setup_step_battery">Battery Optimization</string>
+    <string name="setup_battery_desc">Disable battery restrictions so the gateway stays connected in the background.</string>
+    <string name="setup_disable_battery_opt">Disable Restrictions</string>
+
+    <string name="setup_step_magisk_module">Magisk Module</string>
+    <string name="setup_module_desc">A Magisk module is required to grant privileged system permissions for call audio capture, call control, and telephony monitoring. Without it, only SMS bridging works.</string>
+    <string name="setup_install_module">Install Module</string>
+    <string name="setup_module_installing">Installing\u2026</string>
+    <string name="setup_module_installed">Module installed — reboot to activate permissions.</string>
+    <string name="setup_module_active">All privileged permissions granted.</string>
+    <string name="setup_module_disabled">Module is disabled in Magisk. Tap to re-enable, then reboot.</string>
+    <string name="setup_module_no_root">No root detected. Install the module manually:\n\n1. Open Magisk Manager\n2. Tap Modules \u2192 Install from storage\n3. Select copperhead-gateway-magisk.zip\n4. Reboot the device</string>
+    <string name="setup_module_manual_hint">Without root, flash the module zip manually via Magisk Manager.</string>
+    <string name="setup_reboot_now">Reboot Now</string>
+    <string name="setup_reboot_confirm_title">Reboot Required</string>
+    <string name="setup_reboot_confirm_message">The Magisk module has been installed. A reboot is needed for the privileged permissions to take effect.\n\nReboot now?</string>
+    <string name="setup_module_check_again">Check Again</string>
+    <string name="setup_module_enable">Enable Module</string>
+
+    <string name="setup_step_root_hardening">Root Battery Hardening</string>
+    <string name="setup_root_hardening_desc">Uses root to aggressively whitelist the app against battery killers and prevent the OS from stopping the service.</string>
+    <string name="setup_apply_root_hardening">Apply Protections</string>
+
+    <string name="setup_continue">Continue</string>
+    <string name="setup_finish">Finish Setup</string>
+    <string name="setup_skip">Skip for now</string>
+    <string name="setup_done">Done</string>
+    <string name="setup_rerun">Re-run Setup</string>
+    <string name="setup_apply_root">Apply Root Protections</string>
+</resources>
