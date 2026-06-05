@@ -430,6 +430,11 @@ class SipEngine {
     }
 
     fun hangupCall(call: SipCall) {
+        if (!call.isIncoming && call.state in setOf(SipCall.State.TRYING, SipCall.State.RINGING, SipCall.State.PROGRESS)) {
+            cancelOutgoingInvite(call)
+            return
+        }
+
         call.updateState(SipCall.State.DISCONNECTING)
 
         val msg = SipMessage.Builder()
@@ -448,6 +453,36 @@ class SipEngine {
 
         call.cleanup()
         calls.remove(call.callId)
+        onCallStateChanged?.invoke(call)
+    }
+
+    private fun cancelOutgoingInvite(call: SipCall) {
+        val invite = call.lastInviteMessage
+        val inviteCseq = invite?.cseq?.substringBefore(' ')?.trim()?.toIntOrNull()
+            ?: (call.cseq - 1).coerceAtLeast(1)
+        val uri = invite?.requestUri ?: call.requestUri ?: "sip:${call.remoteNumber}@${config.domain}"
+
+        val msg = SipMessage.Builder()
+            .request("CANCEL", uri)
+            .apply {
+                val vias = invite?.via.orEmpty()
+                if (vias.isNotEmpty()) {
+                    vias.forEach { addHeader("Via", it) }
+                } else {
+                    via(localIp, localPort)
+                }
+            }
+            .header("From", invite?.from ?: call.fromHeader ?: "\"${config.displayName}\" <${config.sipUri}>;tag=${call.localTag}")
+            .header("To", invite?.to ?: call.toHeader ?: "<sip:${call.remoteNumber}@${config.domain}>")
+            .callId(call.callId)
+            .cseq(inviteCseq, "CANCEL")
+            .maxForwards()
+            .userAgent()
+            .build()
+
+        call.updateState(SipCall.State.DISCONNECTING)
+        send(msg)
+        log("[CALL] → CANCEL (call=${shortId(call.callId)}) — outbound INVITE still unanswered")
         onCallStateChanged?.invoke(call)
     }
 
@@ -791,6 +826,7 @@ class SipEngine {
             }
             200 -> {
                 call.remoteTag = msg.toTag
+                call.toHeader = msg.to
                 call.parseRemoteSdp(msg.body)
                 call.updateState(SipCall.State.CONNECTED)
                 call.connectRtp()
@@ -856,6 +892,7 @@ class SipEngine {
                         .contentType("application/sdp")
                         .body(sdp)
                         .build()
+                    call.lastInviteMessage = invite
                     send(invite)
                     log("[CALL] → INVITE (authenticated) (call=${shortId(callId)})")
                 }
