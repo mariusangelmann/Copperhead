@@ -86,23 +86,27 @@ class CallBridge(
         }
     )
 
+    private fun hasNegotiatedRtp(call: SipCall): Boolean =
+        call.rtpStream != null && call.remoteRtpAddress != null && call.remoteRtpPort > 0
+
     /**
-     * Start the audio bridge once BOTH legs are ready: GSM call ACTIVE AND
-     * SIP call CONNECTED. Required because the SIP codec (G.711 vs G.722)
-     * isn't known until 200 OK arrives, and the AudioBridge needs the codec's
-     * PCM rate to size buffers and the upsample ratio correctly. Starting too
-     * early would lock AudioBridge to 8 kHz mode even if G.722 is negotiated,
-     * causing every subsequent 16 kHz packet to be misinterpreted as 8 kHz
-     * with half the samples dropped → audibly "deformed" playback.
+     * Start the audio bridge once BOTH legs are ready: GSM call ACTIVE and SIP
+     * media negotiated. For normal calls that happens at 200 OK. For Follow Me
+     * and queue/MOH style dialplans it often happens earlier in a 183 with SDP,
+     * and waiting for CONNECTED leaves the cellular caller listening to silence
+     * until the PBX answers the INVITE.
      */
     private fun maybeStartAudioBridge(bridge: BridgedCall) {
         if (bridge.audioBridgeStarted) return
         if (!bridge.gsmActive) return
-        if (bridge.sipCall.state != SipCall.State.CONNECTED) return
+        val hasSipMedia = bridge.sipCall.state == SipCall.State.CONNECTED ||
+                (bridge.sipCall.state == SipCall.State.PROGRESS && hasNegotiatedRtp(bridge.sipCall))
+        if (!hasSipMedia) return
         val rtp = bridge.sipCall.rtpStream ?: return
         bridge.audioBridge.start(rtp, rtp.audioSampleRate)
         bridge.audioBridgeStarted = true
-        log("[BRIDGE] ✓ audio bridge active (call=${bridge.sipCall.callId.substringBefore('@').take(8)}, rate=${rtp.audioSampleRate}Hz)")
+        val phase = if (bridge.sipCall.state == SipCall.State.PROGRESS) "early media" else "connected"
+        log("[BRIDGE] ✓ audio bridge active ($phase, call=${bridge.sipCall.callId.substringBefore('@').take(8)}, rate=${rtp.audioSampleRate}Hz)")
     }
 
     fun start() {
@@ -177,6 +181,11 @@ class CallBridge(
         val bridge = bridges[sipCall.callId] ?: return
 
         when (sipCall.state) {
+            SipCall.State.PROGRESS -> {
+                // 183 Session Progress with SDP: PBX is sending early media
+                // such as Follow Me ringback or MOH before final answer.
+                maybeStartAudioBridge(bridge)
+            }
             SipCall.State.CONNECTED -> {
                 // (SIP→GSM only) If we were holding the GSM call open while
                 // waiting for SIP to accept, now answer it.
