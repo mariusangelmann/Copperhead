@@ -36,6 +36,9 @@ class RtpStream(
     private var remoteAddress: InetAddress? = null
     private var remotePort: Int = 0
     private var payloadType: Int = PAYLOAD_TYPE_PCMU
+    // telephone-event is a DYNAMIC payload type: the remote's SDP answer dictates
+    // which number we must send DTMF on. Defaults to our offered 101 until set.
+    private var telephoneEventPt: Int = PAYLOAD_TYPE_TELEPHONE_EVENT
     private var sequenceNumber: Int = 0
     private var timestamp: Long = 0
     private var ssrc: Long = (Math.random() * Int.MAX_VALUE).toLong()
@@ -43,6 +46,14 @@ class RtpStream(
     // Lazily created when codec is set to G.722 (otherwise stays null and
     // doesn't load the native lib).
     private var g722Codec: G722Codec? = null
+
+    // Outbound RFC 2833 telephone-event (DTMF) state. Driven from the audio
+    // capture thread in lock-step with sendAudio(), so it shares the RTP
+    // sequenceNumber/timestamp counters without extra locking.
+    private var dtmfActive = false
+    private var dtmfEventCode = 0
+    private var dtmfTimestamp = 0L
+    private var dtmfDurationTicks = 0
 
     /** PCM sample rate of the audio interface for the negotiated codec. */
     val audioSampleRate: Int
@@ -59,10 +70,16 @@ class RtpStream(
         Log.i(TAG, "RTP socket opened on port ${socket!!.localPort}")
     }
 
-    fun setRemote(address: InetAddress, port: Int, codec: Int = PAYLOAD_TYPE_PCMU) {
+    fun setRemote(
+        address: InetAddress,
+        port: Int,
+        codec: Int = PAYLOAD_TYPE_PCMU,
+        telephoneEventPayloadType: Int = PAYLOAD_TYPE_TELEPHONE_EVENT
+    ) {
         remoteAddress = address
         remotePort = port
         payloadType = codec
+        telephoneEventPt = telephoneEventPayloadType
         if (codec == PAYLOAD_TYPE_G722 && g722Codec == null) {
             g722Codec = G722Codec()
         }
@@ -194,22 +211,72 @@ class RtpStream(
         }
     }
 
-    fun sendDtmf(digit: Int, duration: Int = 160) {
+    /**
+     * Begin an RFC 2833 telephone-event for [eventCode] (0-9, 10='*', 11='#',
+     * 12-15='A'-'D'). Call once at tone onset, then [dtmfUpdate] per audio
+     * frame while the tone is held, then [dtmfEnd] at release.
+     *
+     * MUST be called from the same thread as [sendAudio] (the audio capture
+     * thread): they share the RTP sequence/timestamp counters with no locking.
+     */
+    fun dtmfBegin(eventCode: Int) {
+        if (eventCode < 0 || eventCode > 15) return
+        if (dtmfActive) dtmfEnd()
+        dtmfActive = true
+        dtmfEventCode = eventCode
+        // Anchor the event at the current media timestamp. The audio thread
+        // keeps advancing `timestamp` (blanked frames are still sent during the
+        // tone), so audio after the event lines up exactly at start+duration —
+        // and all event packets carry this same timestamp per RFC 2833 §3.4.
+        dtmfTimestamp = timestamp
+        dtmfDurationTicks = SAMPLES_PER_PACKET
+        sendTelephoneEvent(marker = true, end = false)
+    }
+
+    /** Extend the in-progress telephone-event by one frame. No-op if inactive. */
+    fun dtmfUpdate() {
+        if (!dtmfActive) return
+        dtmfDurationTicks = (dtmfDurationTicks + SAMPLES_PER_PACKET).coerceAtMost(0xFFFF)
+        sendTelephoneEvent(marker = false, end = false)
+    }
+
+    /** Finish the in-progress telephone-event. No-op if inactive. */
+    fun dtmfEnd() {
+        if (!dtmfActive) return
+        // Three end packets (E bit set) for resilience against UDP loss —
+        // Asterisk finalises the digit on whichever it receives first.
+        repeat(3) { sendTelephoneEvent(marker = false, end = true) }
+        dtmfActive = false
+    }
+
+    private fun sendTelephoneEvent(marker: Boolean, end: Boolean) {
         val remote = remoteAddress ?: return
         val port = remotePort
         if (port <= 0) return
 
-        // RFC 2833 telephone-event
-        val payload = ByteArray(4)
-        payload[0] = digit.toByte()
-        payload[1] = 0x0A.toByte() // volume=10
-        payload[2] = ((duration shr 8) and 0xFF).toByte()
-        payload[3] = (duration and 0xFF).toByte()
+        val packet = ByteArray(RTP_HEADER_SIZE + 4)
+        // Version=2, no padding/extension/CSRC.
+        packet[0] = 0x80.toByte()
+        packet[1] = ((if (marker) 0x80 else 0) or (telephoneEventPt and 0x7F)).toByte()
+        packet[2] = ((sequenceNumber shr 8) and 0xFF).toByte()
+        packet[3] = (sequenceNumber and 0xFF).toByte()
+        sequenceNumber = (sequenceNumber + 1) and 0xFFFF
+        // All event packets carry the event's start timestamp (NOT the running
+        // audio timestamp), so the receiver sees one event, not a slide.
+        packet[4] = ((dtmfTimestamp shr 24) and 0xFF).toByte()
+        packet[5] = ((dtmfTimestamp shr 16) and 0xFF).toByte()
+        packet[6] = ((dtmfTimestamp shr 8) and 0xFF).toByte()
+        packet[7] = (dtmfTimestamp and 0xFF).toByte()
+        packet[8] = ((ssrc shr 24) and 0xFF).toByte()
+        packet[9] = ((ssrc shr 16) and 0xFF).toByte()
+        packet[10] = ((ssrc shr 8) and 0xFF).toByte()
+        packet[11] = (ssrc and 0xFF).toByte()
 
-        val savedPt = payloadType
-        payloadType = PAYLOAD_TYPE_TELEPHONE_EVENT
-        val packet = buildRtpPacket(payload, marker = true)
-        payloadType = savedPt
+        // Payload: event(8) | E,R,volume(8) | duration(16), per RFC 2833 §3.5.
+        packet[12] = dtmfEventCode.toByte()
+        packet[13] = ((if (end) 0x80 else 0) or 0x0A).toByte() // E bit + volume 10
+        packet[14] = ((dtmfDurationTicks shr 8) and 0xFF).toByte()
+        packet[15] = (dtmfDurationTicks and 0xFF).toByte()
 
         try {
             socket?.send(DatagramPacket(packet, packet.size, remote, port))

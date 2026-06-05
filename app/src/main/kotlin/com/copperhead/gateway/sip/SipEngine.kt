@@ -303,9 +303,10 @@ class SipEngine {
         val rtp = call.setupRtp(allocateRtpPort())
         val sdp = call.buildLocalSdp(localIp, rtp.actualLocalPort)
 
-        // From header: user stays as the registered gateway extension (so the
-        // PBX accepts the call as authenticated). Display name advertises the
-        // forwarded caller-ID when provided.
+        // From header: user stays as the registered gateway extension so the
+        // PBX accepts the call as authenticated. Display name advertises the
+        // forwarded caller-ID when provided; PAI/RPID below carry the trusted
+        // caller identity for PBX-side caller-ID handling.
         val fromDisplay = callerIdName ?: callerIdNumber ?: config.displayName
 
         call.requestUri = destUri

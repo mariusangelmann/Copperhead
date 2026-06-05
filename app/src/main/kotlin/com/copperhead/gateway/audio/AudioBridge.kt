@@ -9,7 +9,9 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.util.Log
+import com.copperhead.gateway.sip.DtmfDetector
 import com.copperhead.gateway.sip.RtpStream
+import com.copperhead.gateway.sip.dtmfEventCode
 import com.copperhead.gateway.util.MagiskModule
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -138,6 +140,27 @@ class AudioBridge(
         val upsampleRatio = PLAYBACK_SAMPLE_RATE / sampleRate     // 6 or 3
         val playbackPacketShorts = packetSamples * upsampleRatio * PLAYBACK_CHANNELS // 1920 in both cases (!)
         log("Codec input rate=${sampleRate} Hz, packet=${packetSamples} samples, upsample=${upsampleRatio}×, output stereo @ ${PLAYBACK_SAMPLE_RATE} Hz")
+
+        // ── DTMF: detect the caller's in-band tones and re-emit as RFC 2833 ──
+        // The remote cellular party's key presses reach us only as audio tones
+        // in the GSM downlink. FreePBX expects out-of-band RFC 2833, so we
+        // detect the tones here and the RtpStream forwards them as
+        // telephone-event packets (then blank the in-band tone — see capture
+        // loop — so the digit can't register twice).
+        val dtmfDetector = DtmfDetector(sampleRate).apply {
+            onStart = { digit ->
+                val code = dtmfEventCode(digit)
+                if (code >= 0) {
+                    rtp.dtmfBegin(code)
+                    log("DTMF '$digit' → RFC 2833 (event $code)")
+                }
+            }
+            onUpdate = { rtp.dtmfUpdate() }
+            onEnd = { digit, durationMs ->
+                rtp.dtmfEnd()
+                log("DTMF '$digit' released (${durationMs}ms)")
+            }
+        }
 
         audioManager = context?.getSystemService(AudioManager::class.java)?.also { am ->
             // Only capture original state if preMuteMic() didn't already.
@@ -375,10 +398,20 @@ class AudioBridge(
             while (running.get()) {
                 val read = audioRecord?.read(buffer, 0, packetSamples) ?: break
                 if (read > 0) {
+                    // Detect the caller's DTMF in the captured PCM. While a tone
+                    // is active we blank it from the forwarded audio: the digit
+                    // travels out-of-band as RFC 2833 (see dtmfDetector wiring),
+                    // so leaving the in-band tone in would risk a double digit.
+                    if (dtmfDetector.process(buffer, read)) {
+                        buffer.fill(0, 0, read)
+                    }
                     val samples = if (read == packetSamples) buffer else buffer.copyOf(read)
                     rtpStream?.sendAudio(samples)
                 }
             }
+            // Flush any tone still held when capture stops (still on this thread,
+            // so it shares the RTP counters safely).
+            dtmfDetector.reset()
         }
 
         // SIP → GSM: receive-side jitter buffer.

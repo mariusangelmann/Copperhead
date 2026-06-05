@@ -34,6 +34,9 @@ class SipCall(
     var remoteRtpAddress: InetAddress? = null
     var remoteRtpPort: Int = 0
     var remoteCodec: Int = RtpStream.PAYLOAD_TYPE_PCMU
+    // Dynamic payload type the remote negotiated for RFC 2833 telephone-event
+    // (DTMF). Defaults to our offered 101; updated from the remote SDP answer.
+    var remoteTelephoneEventPt: Int = RtpStream.PAYLOAD_TYPE_TELEPHONE_EVENT
 
     // Store the last INVITE message for ACK
     var lastInviteMessage: SipMessage? = null
@@ -80,7 +83,13 @@ class SipCall(
             }
         }
 
-        Log.i(TAG, "Parsed remote SDP: ${remoteRtpAddress?.hostAddress}:$remoteRtpPort codec=$remoteCodec")
+        // telephone-event PT (DTMF). The answerer may renumber this dynamic
+        // type, so use whatever it advertised rather than assuming 101.
+        Regex("""a=rtpmap:(\d+) telephone-event""", RegexOption.IGNORE_CASE).find(sdp)?.let {
+            remoteTelephoneEventPt = it.groupValues[1].toInt()
+        }
+
+        Log.i(TAG, "Parsed remote SDP: ${remoteRtpAddress?.hostAddress}:$remoteRtpPort codec=$remoteCodec dtmfPt=$remoteTelephoneEventPt")
     }
 
     fun buildLocalSdp(localIp: String, localRtpPort: Int): String {
@@ -118,7 +127,7 @@ class SipCall(
         val rtp = rtpStream ?: return
         val addr = remoteRtpAddress ?: return
         if (remoteRtpPort <= 0) return
-        rtp.setRemote(addr, remoteRtpPort, remoteCodec)
+        rtp.setRemote(addr, remoteRtpPort, remoteCodec, remoteTelephoneEventPt)
         rtp.startReceiving()
     }
 
