@@ -63,6 +63,13 @@ class AudioBridge(
         // VoLTE/AMR encoders compress hot signals very aggressively (AGC);
         // -6 dB pre-attenuation keeps us in the codec's intended range.
         private const val PLAYBACK_GAIN = 0.5
+        // Makeup gain applied to captured GSM-downlink samples (caller→SIP)
+        // before encoding. The Tensor VOICE_DOWNLINK tap delivers the caller's
+        // voice ~10 dB below nominal telephony level (measured speech peaks
+        // around -13 dBFS), so without boost it lands quiet in the SIP client.
+        // 3.0× ≈ +9.5 dB; hard-clipped on write so the rare hot frame can't
+        // wrap. Bump toward 4.0 if still quiet (at the cost of more clipping).
+        private const val CAPTURE_GAIN = 3.0
         // Jitter buffer warm-up packets (4 = 80 ms).
         private const val JITTER_WARMUP_PACKETS = 4
         // Jitter buffer overflow cap (12 = 240 ms).
@@ -395,9 +402,31 @@ class AudioBridge(
         // GSM → SIP: read mic/uplink samples, send as RTP.
         captureThread = thread(name = "audio-gsm2sip", isDaemon = true) {
             val buffer = ShortArray(packetSamples)
+            // Capture-side level meter (caller→SIP). Mirrors the playback
+            // peak meter below so logcat shows BOTH directions' levels —
+            // without this, a gutted downlink (e.g. mic-mute killing the input
+            // mix) is invisible. Measured on the raw frame BEFORE DTMF blanking
+            // so a held tone doesn't read as false silence.
+            var capPeak = 0
+            var capFrames = 0
+            var capStatsAt = System.currentTimeMillis()
             while (running.get()) {
                 val read = audioRecord?.read(buffer, 0, packetSamples) ?: break
                 if (read > 0) {
+                    // Makeup gain on the quiet downlink tap, hard-clipped so a
+                    // hot frame can't wrap. Applied before the meter so the log
+                    // peak reflects what's actually sent to SIP.
+                    if (CAPTURE_GAIN != 1.0) {
+                        for (i in 0 until read) {
+                            buffer[i] = (buffer[i] * CAPTURE_GAIN).toInt()
+                                .coerceIn(-32768, 32767).toShort()
+                        }
+                    }
+                    for (i in 0 until read) {
+                        val a = if (buffer[i] < 0) -buffer[i].toInt() else buffer[i].toInt()
+                        if (a > capPeak) capPeak = a
+                    }
+                    capFrames++
                     // Detect the caller's DTMF in the captured PCM. While a tone
                     // is active we blank it from the forwarded audio: the digit
                     // travels out-of-band as RFC 2833 (see dtmfDetector wiring),
@@ -407,6 +436,14 @@ class AudioBridge(
                     }
                     val samples = if (read == packetSamples) buffer else buffer.copyOf(read)
                     rtpStream?.sendAudio(samples)
+                }
+                val now = System.currentTimeMillis()
+                if (now - capStatsAt >= 5000) {
+                    val capDb = if (capPeak > 0) (20.0 * Math.log10(capPeak / 32767.0)).toInt() else -99
+                    log("[AUDIO] capture (caller→SIP) frames=${capFrames / 5}/s, peak=${capDb} dBFS (gain=${CAPTURE_GAIN}×), src=${sourceName(chosenSource)}, micMute=${audioManager?.isMicrophoneMute}")
+                    capStatsAt = now
+                    capPeak = 0
+                    capFrames = 0
                 }
             }
             // Flush any tone still held when capture stops (still on this thread,
